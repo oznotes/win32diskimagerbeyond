@@ -26,7 +26,7 @@ INCLUDEPATH += .
 #CONFIG += release
 DEFINES -= UNICODE
 QT += widgets
-VERSION = 1.0.1
+VERSION = 1.0.2
 VERSTR = '\\"$${VERSION}\\"'
 DEFINES += VER=\"$${VERSTR}\"
 DEFINES += WINVER=0x0601
@@ -37,6 +37,7 @@ QMAKE_TARGET_COPYRIGHT = "Copyright (C) 2009-2019 Windows ImageWriter Team"
 
 # Input
 HEADERS += disk.h\
+           driveList.h \
            mainwindow.h\
            droppablelineedit.h \
            elapsedtimer.h
@@ -44,6 +45,7 @@ HEADERS += disk.h\
 FORMS += mainwindow.ui
 
 SOURCES += disk.cpp\
+           driveList.cpp \
            main.cpp\
            mainwindow.cpp\
            droppablelineedit.cpp \

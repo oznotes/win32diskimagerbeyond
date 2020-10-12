@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>480</width>
-    <height>303</height>
+    <width>499</width>
+    <height>556</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -114,6 +114,17 @@
              <horstretch>0</horstretch>
              <verstretch>0</verstretch>
             </sizepolicy>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QToolButton" name="tbSearch">
+           <property name="text">
+            <string>...</string>
+           </property>
+           <property name="icon">
+            <iconset resource="gui_icons.qrc">
+             <normaloff>:/images/images/search.png</normaloff>:/images/images/search.png</iconset>
            </property>
           </widget>
          </item>
@@ -300,6 +311,16 @@
      </widget>
     </item>
     <item>
+     <widget class="QTableView" name="PartView"/>
+    </item>
+    <item>
+     <widget class="QLabel" name="statLabel">
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+    </item>
+    <item>
      <layout class="QHBoxLayout">
       <item>
        <widget class="QPushButton" name="bCancel">
@@ -317,6 +338,16 @@
         </property>
         <property name="text">
          <string>Cancel</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="bDetect">
+        <property name="statusTip">
+         <string>Detect 'Device' Partitions</string>
+        </property>
+        <property name="text">
+         <string>Detect</string>
         </property>
        </widget>
       </item>

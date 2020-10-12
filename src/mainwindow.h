@@ -26,12 +26,38 @@
 
 #include <QtWidgets>
 #include <windows.h>
+#include <QByteArray>
 //#include <memory>
 #include "ui_mainwindow.h"
 
 class QClipboard;
 class ElapsedTimer;
 
+class TestModel : public QAbstractTableModel
+{
+    Q_OBJECT
+
+public:
+    TestModel(QObject *parent = 0);
+
+    void populateData(const QList<QString> &PartitionName,const QList<QString> &PartitionStart,const QList<QString> &PartitionEnd,const QList<QString> &PartitionSize);
+
+    int rowCount(const QModelIndex &parent = QModelIndex()) const Q_DECL_OVERRIDE;
+    int columnCount(const QModelIndex &parent = QModelIndex()) const Q_DECL_OVERRIDE;
+
+    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const Q_DECL_OVERRIDE;
+    QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const Q_DECL_OVERRIDE;
+
+
+private:
+    QList<QString> tm_partition_name;
+    QList<QString> tm_partition_start;
+    QList<QString> tm_partition_end;
+    QList<QString> tm_partition_size;
+
+
+
+};
 class MainWindow : public QMainWindow, public Ui::MainWindow
 {
     Q_OBJECT
@@ -44,9 +70,10 @@ class MainWindow : public QMainWindow, public Ui::MainWindow
         }
 
         ~MainWindow();
+
         void closeEvent(QCloseEvent *event);
         enum Status {STATUS_IDLE=0, STATUS_READING, STATUS_WRITING, STATUS_VERIFYING, STATUS_EXIT, STATUS_CANCELED};
-        bool nativeEvent(const QByteArray &type, void *vMsg, long *result);
+        bool nativeEvent(const QByteArray &type, void *vMsg, long *result) Q_DECL_OVERRIDE;
     protected slots:
         void on_tbBrowse_clicked();
         void on_bCancel_clicked();
@@ -58,6 +85,9 @@ class MainWindow : public QMainWindow, public Ui::MainWindow
 private slots:
         void on_cboxHashType_IdxChg();
         void on_bHashGen_clicked();
+        void on_bDetect_clicked();
+        void on_tbSearch_clicked();
+
 protected:
         MainWindow(QWidget* = NULL);
 private:
@@ -69,6 +99,7 @@ private:
         void loadSettings();
         void initializeHomeDir();
         void updateHashControls();
+
 
         HANDLE hVolume;
         HANDLE hFile;
@@ -83,6 +114,8 @@ private:
         QClipboard *clipboard;
         void generateHash(char *filename, int hashish);
         QString myHomeDir;
+        QByteArray swapper(QByteArray input);
+
 };
 
 #endif // MAINWINDOW_H
