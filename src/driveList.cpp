@@ -2,8 +2,8 @@
 #include <windows.h>
 
 #include <stdio.h>
-#include <time.h>		// time()
-#include <process.h>	// _getpid()
+#include <time.h>
+#include <process.h>
 #include <wincrypt.h>
 #include "getopt.h"
 
@@ -289,8 +289,7 @@ static QList<QString> list_devices() {
 //    );
 
 
-    char *format_str = (char*) "%-30s %9S %-9s %-20S\n";  //char* p = (char*)"abc"; // OK: cast added
-
+    char *format_str = (char*) "%-30s %9S %-9s %-20S\n";
     char szTmp[MAX_PATH];
     int i;
 

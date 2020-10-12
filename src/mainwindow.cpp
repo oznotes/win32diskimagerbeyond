@@ -26,6 +26,7 @@
 #include <QFileInfo>
 #include <QDirIterator>
 #include <QClipboard>
+#include <QByteArray>
 #include <cstdio>
 #include <cstdlib>
 #include <windows.h>
@@ -34,8 +35,6 @@
 #include <shlobj.h>
 #include <iostream>
 #include <sstream>
-#include <QByteArray>
-
 #include "disk.h"
 #include "mainwindow.h"
 #include "elapsedtimer.h"
@@ -148,8 +147,9 @@ void MainWindow::initializeHomeDir()
     QString downloadPath = qgetenv("DiskImagesDir");
     if (downloadPath.isEmpty()) {
         PWSTR pPath = NULL;
-        static GUID downloads = {0x374de290, 0x123f, 0x4565, 0x91, 0x64, 0x39,
-                                 0xc4, 0x92, 0x5e, 0x46, 0x7b};
+        static GUID downloads ={
+            0x374de290, 0x123f, 0x4565, 0x91, 0x64, 0x39, 0xc4, 0x92, 0x5e, 0x46, 0x7b
+        };
         if (SHGetKnownFolderPath(downloads, 0, 0, &pPath) == S_OK) {
             downloadPath = QDir::fromNativeSeparators(QString::fromWCharArray(pPath));
             LocalFree(pPath);
@@ -358,41 +358,7 @@ void MainWindow::on_bWrite_clicked()
             bDetect->setEnabled(false);
             double mbpersec;
             unsigned long long i, lasti, availablesectors, numsectors;
-            //int volumeID = cboxDevice->currentText().at(1).toLatin1() - 'A';
-            // int deviceID = cboxDevice->itemData(cboxDevice->currentIndex()).toInt();
             DWORD deviceID = cboxDevice->currentText().split("\\\\.\\PhysicalDrive")[1].toInt();
-
-            //hVolume = getHandleOnVolume(volumeID, GENERIC_WRITE);
-            /*
-            if (hVolume == INVALID_HANDLE_VALUE)
-            {
-                status = STATUS_IDLE;
-                bCancel->setEnabled(false);
-                setReadWriteButtonState();
-                return;
-            }
-            DWORD deviceID = getDeviceID(hVolume);
-            if (!getLockOnVolume(hVolume))
-            {
-                CloseHandle(hVolume);
-                status = STATUS_IDLE;
-                hVolume = INVALID_HANDLE_VALUE;
-                bCancel->setEnabled(false);
-                setReadWriteButtonState();
-                return;
-            }
-            if (!unmountVolume(hVolume))
-            {
-                removeLockOnVolume(hVolume);
-                CloseHandle(hVolume);
-                status = STATUS_IDLE;
-                hVolume = INVALID_HANDLE_VALUE;
-                bCancel->setEnabled(false);
-                setReadWriteButtonState();
-                return;
-            }
-            */
-
             hFile = getHandleOnFile(LPCWSTR(leFile->text().data()), GENERIC_READ);
             if (hFile == INVALID_HANDLE_VALUE)
             {
@@ -448,7 +414,6 @@ void MainWindow::on_bWrite_clicked()
                 //CloseHandle(hVolume);
                 hRawDisk = INVALID_HANDLE_VALUE;
                 hFile = INVALID_HANDLE_VALUE;
-                //hVolume = INVALID_HANDLE_VALUE;
                 passfail = false;
                 status = STATUS_IDLE;
                 return;
@@ -462,10 +427,8 @@ void MainWindow::on_bWrite_clicked()
                 removeLockOnVolume(hRawDisk);
                 CloseHandle(hRawDisk);
                 CloseHandle(hFile);
-                //CloseHandle(hVolume);
                 hRawDisk = INVALID_HANDLE_VALUE;
                 hFile = INVALID_HANDLE_VALUE;
-                //hVolume = INVALID_HANDLE_VALUE;
                 status = STATUS_IDLE;
                 return;
 
@@ -519,9 +482,7 @@ void MainWindow::on_bWrite_clicked()
                     removeLockOnVolume(hRawDisk);
                     CloseHandle(hRawDisk);
                     CloseHandle(hFile);
-                    //CloseHandle(hVolume);
                     status = STATUS_IDLE;
-                    //hVolume = INVALID_HANDLE_VALUE;
                     hFile = INVALID_HANDLE_VALUE;
                     hRawDisk = INVALID_HANDLE_VALUE;
                     bCancel->setEnabled(false);
@@ -542,9 +503,7 @@ void MainWindow::on_bWrite_clicked()
                     removeLockOnVolume(hRawDisk);
                     CloseHandle(hRawDisk);
                     CloseHandle(hFile);
-                    //CloseHandle(hVolume);
                     status = STATUS_IDLE;
-                    //hRawDisk = INVALID_HANDLE_VALUE;
                     hFile = INVALID_HANDLE_VALUE;
                     hVolume = INVALID_HANDLE_VALUE;
                     bCancel->setEnabled(false);
@@ -557,12 +516,10 @@ void MainWindow::on_bWrite_clicked()
                     removeLockOnVolume(hRawDisk);
                     CloseHandle(hRawDisk);
                     CloseHandle(hFile);
-                    //CloseHandle(hVolume);
                     status = STATUS_IDLE;
                     sectorData = NULL;
                     hRawDisk = INVALID_HANDLE_VALUE;
                     hFile = INVALID_HANDLE_VALUE;
-                    //hVolume = INVALID_HANDLE_VALUE;
                     bCancel->setEnabled(false);
                     setReadWriteButtonState();
                     return;
@@ -584,10 +541,8 @@ void MainWindow::on_bWrite_clicked()
             removeLockOnVolume(hRawDisk);
             CloseHandle(hRawDisk);
             CloseHandle(hFile);
-            //CloseHandle(hVolume);
             hRawDisk = INVALID_HANDLE_VALUE;
             hFile = INVALID_HANDLE_VALUE;
-            //hVolume = INVALID_HANDLE_VALUE;
             if (status == STATUS_CANCELED){
                 passfail = false;
             }
@@ -661,38 +616,7 @@ void MainWindow::on_bRead_clicked()
         status = STATUS_READING;
         double mbpersec;
         unsigned long long i, lasti, numsectors, filesize, spaceneeded = 0ull;
-        //int volumeID = cboxDevice->currentText().at(1).toLatin1() - 'A';
         DWORD deviceID = cboxDevice->currentText().split("\\\\.\\PhysicalDrive")[1].toInt();
-        /*
-        //hVolume = getHandleOnVolume(volumeID, GENERIC_READ);
-        if (hVolume == INVALID_HANDLE_VALUE)
-        {
-            status = STATUS_IDLE;
-            bCancel->setEnabled(false);
-            setReadWriteButtonState();
-            return;
-        }
-        DWORD deviceID = getDeviceID(hVolume);
-        if (!getLockOnVolume(hVolume))
-        {
-            CloseHandle(hVolume);
-            status = STATUS_IDLE;
-            hVolume = INVALID_HANDLE_VALUE;
-            bCancel->setEnabled(false);
-            setReadWriteButtonState();
-            return;
-        }
-        if (!unmountVolume(hVolume))
-        {
-            removeLockOnVolume(hVolume);
-            CloseHandle(hVolume);
-            status = STATUS_IDLE;
-            hVolume = INVALID_HANDLE_VALUE;
-            bCancel->setEnabled(false);
-            setReadWriteButtonState();
-            return;
-        }
-        */
         hFile = getHandleOnFile(LPCWSTR(myFile.data()), GENERIC_WRITE);
         if (hFile == INVALID_HANDLE_VALUE)
         {
@@ -781,7 +705,6 @@ void MainWindow::on_bRead_clicked()
             sectorData = NULL;
             hRawDisk = INVALID_HANDLE_VALUE;
             hFile = INVALID_HANDLE_VALUE;
-            //hVolume = INVALID_HANDLE_VALUE;
             bCancel->setEnabled(false);
             setReadWriteButtonState();
             return;
@@ -805,7 +728,6 @@ void MainWindow::on_bRead_clicked()
                 removeLockOnVolume(hRawDisk);
                 CloseHandle(hRawDisk);
                 CloseHandle(hFile);
-                //CloseHandle(hVolume);
                 status = STATUS_IDLE;
                 hRawDisk = INVALID_HANDLE_VALUE;
                 hFile = INVALID_HANDLE_VALUE;
@@ -820,10 +742,8 @@ void MainWindow::on_bRead_clicked()
                 removeLockOnVolume(hRawDisk);
                 CloseHandle(hRawDisk);
                 CloseHandle(hFile);
-                //CloseHandle(hVolume);
                 status = STATUS_IDLE;
                 sectorData = NULL;
-                //hRawDisk = INVALID_HANDLE_VALUE;
                 hFile = INVALID_HANDLE_VALUE;
                 hVolume = INVALID_HANDLE_VALUE;
                 bCancel->setEnabled(false);
@@ -846,10 +766,8 @@ void MainWindow::on_bRead_clicked()
         removeLockOnVolume(hRawDisk);
         CloseHandle(hRawDisk);
         CloseHandle(hFile);
-        //CloseHandle(hVolume);
         hRawDisk = INVALID_HANDLE_VALUE;
         hFile = INVALID_HANDLE_VALUE;
-        //hVolume = INVALID_HANDLE_VALUE;
         progressbar->reset();
         statusbar->showMessage(tr("Done."));
         bCancel->setEnabled(false);
@@ -896,38 +814,7 @@ void MainWindow::on_bVerify_clicked()
             bDetect->setEnabled(false);
             double mbpersec;
             unsigned long long i, lasti, availablesectors, numsectors, result;
-            //int volumeID = cboxDevice->currentText().at(1).toLatin1() - 'A';
             DWORD deviceID = cboxDevice->currentText().split("\\\\.\\PhysicalDrive")[1].toInt();
-            /*
-            hVolume = getHandleOnVolume(volumeID, GENERIC_READ);
-            if (hVolume == INVALID_HANDLE_VALUE)
-            {
-                status = STATUS_IDLE;
-                bCancel->setEnabled(false);
-                setReadWriteButtonState();
-                return;
-            }
-            DWORD deviceID = getDeviceID(hVolume);
-            if (!getLockOnVolume(hVolume))
-            {
-                CloseHandle(hVolume);
-                status = STATUS_IDLE;
-                hVolume = INVALID_HANDLE_VALUE;
-                bCancel->setEnabled(false);
-                setReadWriteButtonState();
-                return;
-            }
-            if (!unmountVolume(hVolume))
-            {
-                removeLockOnVolume(hVolume);
-                CloseHandle(hVolume);
-                status = STATUS_IDLE;
-                hVolume = INVALID_HANDLE_VALUE;
-                bCancel->setEnabled(false);
-                setReadWriteButtonState();
-                return;
-            }
-            */
             hFile = getHandleOnFile(LPCWSTR(leFile->text().data()), GENERIC_READ);
             if (hFile == INVALID_HANDLE_VALUE)
             {
@@ -979,10 +866,8 @@ void MainWindow::on_bVerify_clicked()
                 removeLockOnVolume(hRawDisk);
                 CloseHandle(hRawDisk);
                 CloseHandle(hFile);
-                //CloseHandle(hVolume);
                 hRawDisk = INVALID_HANDLE_VALUE;
                 hFile = INVALID_HANDLE_VALUE;
-                //hVolume = INVALID_HANDLE_VALUE;
                 passfail = false;
                 status = STATUS_IDLE;
                 return;
@@ -996,10 +881,8 @@ void MainWindow::on_bVerify_clicked()
                 removeLockOnVolume(hRawDisk);
                 CloseHandle(hRawDisk);
                 CloseHandle(hFile);
-                //CloseHandle(hVolume);
                 hRawDisk = INVALID_HANDLE_VALUE;
                 hFile = INVALID_HANDLE_VALUE;
-                //hVolume = INVALID_HANDLE_VALUE;
                 status = STATUS_IDLE;
                 return;
 
@@ -1053,9 +936,7 @@ void MainWindow::on_bVerify_clicked()
                     removeLockOnVolume(hRawDisk);
                     CloseHandle(hRawDisk);
                     CloseHandle(hFile);
-                    //CloseHandle(hVolume);
                     status = STATUS_IDLE;
-                    //hVolume = INVALID_HANDLE_VALUE;
                     hFile = INVALID_HANDLE_VALUE;
                     hRawDisk = INVALID_HANDLE_VALUE;
                     bCancel->setEnabled(false);
@@ -1075,11 +956,9 @@ void MainWindow::on_bVerify_clicked()
                     removeLockOnVolume(hRawDisk);
                     CloseHandle(hRawDisk);
                     CloseHandle(hFile);
-                    //CloseHandle(hVolume);
                     status = STATUS_IDLE;
                     hRawDisk = INVALID_HANDLE_VALUE;
                     hFile = INVALID_HANDLE_VALUE;
-                    //hVolume = INVALID_HANDLE_VALUE;
                     bCancel->setEnabled(false);
                     setReadWriteButtonState();
                     return;
@@ -1091,11 +970,9 @@ void MainWindow::on_bVerify_clicked()
                     removeLockOnVolume(hRawDisk);
                     CloseHandle(hRawDisk);
                     CloseHandle(hFile);
-                    //CloseHandle(hVolume);
                     status = STATUS_IDLE;
                     hRawDisk = INVALID_HANDLE_VALUE;
                     hFile = INVALID_HANDLE_VALUE;
-                    //hVolume = INVALID_HANDLE_VALUE;
                     bCancel->setEnabled(false);
                     setReadWriteButtonState();
                     return;
@@ -1126,14 +1003,12 @@ void MainWindow::on_bVerify_clicked()
             removeLockOnVolume(hRawDisk);
             CloseHandle(hRawDisk);
             CloseHandle(hFile);
-            //CloseHandle(hVolume);
             delete[] sectorData;
             delete[] sectorData2;
             sectorData = NULL;
             sectorData2 = NULL;
             hRawDisk = INVALID_HANDLE_VALUE;
             hFile = INVALID_HANDLE_VALUE;
-            //hVolume = INVALID_HANDLE_VALUE;
             if (status == STATUS_CANCELED){
                 passfail = false;
             }
@@ -1347,38 +1222,7 @@ void MainWindow::on_bDetect_clicked()
     double mbpersec;
     unsigned long long i, lasti, numsectors = 0ull;
     // changes ..
-    //int volumeID = cboxDevice->currentText().at(1).toLatin1() - 'A';
     DWORD deviceID = cboxDevice->currentText().split("\\\\.\\PhysicalDrive")[1].toInt();
-
-    //hVolume = getHandleOnVolume(volumeID, GENERIC_READ);
-    //if (hVolume == INVALID_HANDLE_VALUE)
-    //{
-    //    status = STATUS_IDLE;
-    //    bCancel->setEnabled(false);
-    //    setReadWriteButtonState();
-    //    return;
-    //}
-    //DWORD deviceID = getDeviceID(hVolume);
-    //if (!getLockOnVolume(hVolume))
-    //{
-    //    CloseHandle(hVolume);
-    //    status = STATUS_IDLE;
-    //    hVolume = INVALID_HANDLE_VALUE;
-    //    bCancel->setEnabled(false);
-    //    setReadWriteButtonState();
-    //   return;
-    //}
-    //if (!unmountVolume(hVolume))
-    //{
-    //    removeLockOnVolume(hVolume);
-    //    CloseHandle(hVolume);
-    //    status = STATUS_IDLE;
-    //    hVolume = INVALID_HANDLE_VALUE;
-    //    bCancel->setEnabled(false);
-    //    setReadWriteButtonState();
-    //    return;
-    //}
-
     hRawDisk = getHandleOnDevice(deviceID, GENERIC_READ);
 
     // addition
@@ -1403,8 +1247,6 @@ void MainWindow::on_bDetect_clicked()
     }
 
     // end of addition test .
-
-
     if (hRawDisk == INVALID_HANDLE_VALUE)
     {
         removeLockOnVolume(hVolume);
@@ -1453,14 +1295,12 @@ void MainWindow::on_bDetect_clicked()
 
         if (sectorData == NULL)
         {
-            removeLockOnVolume(hRawDisk); //<<
+            removeLockOnVolume(hRawDisk);
             CloseHandle(hRawDisk);
             CloseHandle(hFile);
-            //CloseHandle(hVolume); << changed
             status = STATUS_IDLE;
             hRawDisk = INVALID_HANDLE_VALUE;
             hFile = INVALID_HANDLE_VALUE;
-            //hVolume = INVALID_HANDLE_VALUE;
             bCancel->setEnabled(false);
             setReadWriteButtonState();
             return;
@@ -1606,10 +1446,8 @@ void MainWindow::on_bDetect_clicked()
     removeLockOnVolume(hRawDisk);// <<
     CloseHandle(hRawDisk);
     CloseHandle(hFile);
-    //CloseHandle(hVolume);
     hRawDisk = INVALID_HANDLE_VALUE;
     hFile = INVALID_HANDLE_VALUE;
-    //hVolume = INVALID_HANDLE_VALUE;
     progressbar->reset();
     statusbar->showMessage(tr("Done."));
     bCancel->setEnabled(false);
