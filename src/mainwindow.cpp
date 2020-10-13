@@ -148,7 +148,7 @@ void MainWindow::initializeHomeDir()
 	if (downloadPath.isEmpty()) {
 		PWSTR pPath = NULL;
 		static GUID downloads = {
-			0x374de290, 0x123f, 0x4565, 0x91, 0x64, 0x39, 0xc4, 0x92, 0x5e, 0x46, 0x7b
+            0x374de290, 0x123f, 0x4565, 0x91, 0x64, 0x39, 0xc4, 0x92, 0x5e, 0x46, 0x7b
 		};
 		if (SHGetKnownFolderPath(downloads, 0, 0, &pPath) == S_OK) {
 			downloadPath = QDir::fromNativeSeparators(QString::fromWCharArray(pPath));
