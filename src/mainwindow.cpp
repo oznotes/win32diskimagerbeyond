@@ -1054,7 +1054,6 @@ void MainWindow::getLogicalDrives()
 	ULONG pID;
 
 	cboxDevice->clear();
-    //QList<QString> Templist;
     QList<QString> DeviceList = list_devices();
     DeviceList.removeAll(QString(""));
 
@@ -1070,7 +1069,6 @@ void MainWindow::getLogicalDrives()
 			drivename[4] += i;
 			if (!isDriveIgnored(drivename[4]))
 			{
-                //Templist.append(QString("[%1:\\]").arg(drivename[4]));
 				if (checkDriveType(drivename, &pID))
 				{
                     // cboxDevice->addItem(QString("[%1:\\]").arg(drivename[4]), (qulonglong)pID);
