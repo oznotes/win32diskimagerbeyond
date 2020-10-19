@@ -1050,9 +1050,15 @@ void MainWindow::getLogicalDrives()
 	// the drives available on the system (bit 0 = A:, bit 1 = B:, etc)
 	unsigned long driveMask = GetLogicalDrives();
 	int i = 0;
+    int x = 0;
 	ULONG pID;
 
 	cboxDevice->clear();
+    //QList<QString> Templist;
+    QList<QString> DeviceList = list_devices();
+    DeviceList.removeAll(QString(""));
+
+
 
 	while (driveMask != 0)
 	{
@@ -1064,19 +1070,25 @@ void MainWindow::getLogicalDrives()
 			drivename[4] += i;
 			if (!isDriveIgnored(drivename[4]))
 			{
+                //Templist.append(QString("[%1:\\]").arg(drivename[4]));
 				if (checkDriveType(drivename, &pID))
 				{
-					//cboxDevice->addItem(QString("[%1:\\]").arg(drivename[4]), (qulonglong)pID);
-					// Drives no need.
+                    // cboxDevice->addItem(QString("[%1:\\]").arg(drivename[4]), (qulonglong)pID);
+                    // Drives no need.
 				}
+                else
+                {
+                    // if anything is not approved ..
+                    // remove.
+                    DeviceList.removeAt(x);
+                }
 			}
+            ++x;
 		}
 		driveMask >>= 1;
 		cboxDevice->setCurrentIndex(0);
 		++i;
 	}
-	QList<QString> DeviceList = list_devices();
-	DeviceList.removeAll(QString(""));
 
 	foreach(QString drive, DeviceList) {
 		cboxDevice->addItem(drive);

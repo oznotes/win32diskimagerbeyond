@@ -168,7 +168,6 @@ static QString list_device(char *format_str, char *szTmp, int n) {
     wchar_t size[100] = {0}, partTypeStr[1024] = {0};
     const wchar_t *partType = partTypeStr; // splitted from ^ added const and got rid of compiler warnings.
     QString device;
-
     BOOL drivePresent = FALSE;
     BOOL removable = FALSE;
 

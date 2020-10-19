@@ -394,6 +394,7 @@ bool slashify(char *str, char **slash, char **noSlash)
     if ( strLen > 0 )
     {
         if ( *(str + strLen - 1) == '\\' )
+            // fucking memory is good thing.
         {
             // trailing slash exists
             if (( (*slash = (char *)calloc( (strLen + 1), sizeof(char))) != NULL) &&
