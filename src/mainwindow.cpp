@@ -1459,7 +1459,6 @@ void MainWindow::on_bDetect_clicked()
 	elapsed_timer->stop();
 }
 
-// Create a method to populate the model with data:
 void TestModel::populateData(const QList<QString>& pName, const QList<QString>& pStart, const QList<QString>& pEnd, const QList<QString>& pSize)
 {
 	tm_partition_name.clear();
@@ -1541,6 +1540,9 @@ QByteArray MainWindow::swapper(QByteArray input)
 
 void MainWindow::on_tbSearch_clicked()
 {
-	cboxDevice->clear();
-	getLogicalDrives();
+    if(status==STATUS_IDLE){
+        cboxDevice->clear();
+        getLogicalDrives();
+    }
+
 }
