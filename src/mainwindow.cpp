@@ -1119,7 +1119,10 @@ bool MainWindow::nativeEvent(const QByteArray& type, void* vMsg, long* result)
 	Q_UNUSED(type);
 	MSG* msg = (MSG*)vMsg;
 	if (msg->message == WM_DEVICECHANGE)
-	{
+    {
+        if(status != STATUS_IDLE){
+        return false;
+        }
 		PDEV_BROADCAST_HDR lpdb = (PDEV_BROADCAST_HDR)msg->lParam;
 		switch (msg->wParam)
 		{
