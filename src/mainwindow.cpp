@@ -148,7 +148,7 @@ void MainWindow::initializeHomeDir()
 	if (downloadPath.isEmpty()) {
 		PWSTR pPath = NULL;
 		static GUID downloads = {
-            0x374de290, 0x123f, 0x4565, 0x91, 0x64, 0x39, 0xc4, 0x92, 0x5e, 0x46, 0x7b
+			0x374de290, 0x123f, 0x4565, 0x91, 0x64, 0x39, 0xc4, 0x92, 0x5e, 0x46, 0x7b
 		};
 		if (SHGetKnownFolderPath(downloads, 0, 0, &pPath) == S_OK) {
 			downloadPath = QDir::fromNativeSeparators(QString::fromWCharArray(pPath));
@@ -1050,14 +1050,12 @@ void MainWindow::getLogicalDrives()
 	// the drives available on the system (bit 0 = A:, bit 1 = B:, etc)
 	unsigned long driveMask = GetLogicalDrives();
 	int i = 0;
-    int x = 0;
+	int x = 0;
 	ULONG pID;
 
 	cboxDevice->clear();
-    QList<QString> DeviceList = list_devices();
-    DeviceList.removeAll(QString(""));
-
-
+	QList<QString> DeviceList = list_devices();
+	DeviceList.removeAll(QString(""));
 
 	while (driveMask != 0)
 	{
@@ -1071,17 +1069,17 @@ void MainWindow::getLogicalDrives()
 			{
 				if (checkDriveType(drivename, &pID))
 				{
-                    // cboxDevice->addItem(QString("[%1:\\]").arg(drivename[4]), (qulonglong)pID);
-                    // Drives no need.
+					// cboxDevice->addItem(QString("[%1:\\]").arg(drivename[4]), (qulonglong)pID);
+					// Drives no need.
 				}
-                else
-                {
-                    // if anything is not approved ..
-                    // remove.
-                    DeviceList.removeAt(x);
-                }
+				else
+				{
+					// if anything is not approved ..
+					// remove.
+					DeviceList.removeAt(x);
+				}
 			}
-            ++x;
+			++x;
 		}
 		driveMask >>= 1;
 		cboxDevice->setCurrentIndex(0);
@@ -1119,10 +1117,10 @@ bool MainWindow::nativeEvent(const QByteArray& type, void* vMsg, long* result)
 	Q_UNUSED(type);
 	MSG* msg = (MSG*)vMsg;
 	if (msg->message == WM_DEVICECHANGE)
-    {
-        if(status != STATUS_IDLE){
-        return false;
-        }
+	{
+		if (status != STATUS_IDLE) {
+			return false;
+		}
 		PDEV_BROADCAST_HDR lpdb = (PDEV_BROADCAST_HDR)msg->lParam;
 		switch (msg->wParam)
 		{
@@ -1540,9 +1538,8 @@ QByteArray MainWindow::swapper(QByteArray input)
 
 void MainWindow::on_tbSearch_clicked()
 {
-    if(status==STATUS_IDLE){
-        cboxDevice->clear();
-        getLogicalDrives();
-    }
-
+	if (status == STATUS_IDLE) {
+		cboxDevice->clear();
+		getLogicalDrives();
+	}
 }

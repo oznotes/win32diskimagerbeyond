@@ -29,19 +29,18 @@
 #include "disk.h"
 #include "mainwindow.h"
 
-
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
-    QApplication app(argc, argv);
-    app.setApplicationDisplayName(VER);
-    app.setAttribute(Qt::AA_UseDesktopOpenGL);
-    app.setAttribute(Qt::AA_EnableHighDpiScaling);
+	QApplication app(argc, argv);
+	app.setApplicationDisplayName(VER);
+	app.setAttribute(Qt::AA_UseDesktopOpenGL);
+	app.setAttribute(Qt::AA_EnableHighDpiScaling);
 
-    QTranslator translator;
-    translator.load("translations/diskimager_" + QLocale::system().name());
-    app.installTranslator(&translator);
+	QTranslator translator;
+	translator.load("translations/diskimager_" + QLocale::system().name());
+	app.installTranslator(&translator);
 
-    MainWindow* mainwindow = MainWindow::getInstance();
-    mainwindow->show();
-    return app.exec();
+	MainWindow* mainwindow = MainWindow::getInstance();
+	mainwindow->show();
+	return app.exec();
 }

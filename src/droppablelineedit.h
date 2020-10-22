@@ -25,17 +25,15 @@
 
 class DroppableLineEdit : public QLineEdit
 {
-    Q_OBJECT
+	Q_OBJECT
 
 public:
-    DroppableLineEdit(QWidget *parent = 0);
+	DroppableLineEdit(QWidget* parent = 0);
 
-    void dragEnterEvent(QDragEnterEvent *event);
-    void dropEvent(QDropEvent *event);
+	void dragEnterEvent(QDragEnterEvent* event);
+	void dropEvent(QDropEvent* event);
 
 private:
-
 };
-
 
 #endif
