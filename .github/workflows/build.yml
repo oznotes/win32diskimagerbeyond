@@ -34,15 +34,12 @@ jobs:
         cd src
         qmake DiskImager.pro CONFIG+=release
         nmake
-      shell: cmd
 
     - name: Prepare artifacts
       run: |
         mkdir release
-        REM The .pro file outputs to ../../Win32DiskImager.exe (one level above repo root)
-        copy ..\Win32DiskImager.exe release\
+        copy Win32DiskImager.exe release\
         windeployqt --release --no-translations --no-system-d3d-compiler --no-opengl-sw release\Win32DiskImager.exe
-      shell: cmd
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
