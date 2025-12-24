@@ -58,8 +58,9 @@ inline void dbgLogClose() {}
 int main(int argc, char* argv[])
 {
 	dbgLog("Step 1: Starting");
-	QCoreApplication::setAttribute(Qt::AA_UseSoftwareOpenGL);
 	QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+	QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+	QCoreApplication::setAttribute(Qt::AA_UseSoftwareOpenGL);
 	dbgLog("Step 2: Creating QApplication");
 	QApplication app(argc, argv);
 	dbgLog("Step 3: QApplication created");

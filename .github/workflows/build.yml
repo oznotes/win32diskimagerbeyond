@@ -1,0 +1,48 @@
+name: Build Win32DiskImager
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:  # Manual trigger from GitHub UI
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Qt 5.15.2
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: '5.15.2'
+        host: 'windows'
+        target: 'desktop'
+        arch: 'win64_msvc2019_64'
+        cache: true
+
+    - name: Setup MSVC
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x64
+
+    - name: Build
+      run: |
+        cd src
+        qmake DiskImager.pro CONFIG+=release
+        nmake
+
+    - name: Prepare artifacts
+      run: |
+        mkdir release
+        copy Win32DiskImager.exe release\
+        windeployqt --release --no-translations --no-system-d3d-compiler --no-opengl-sw release\Win32DiskImager.exe
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Win32DiskImager-x64
+        path: release\

@@ -27,6 +27,7 @@
 #include <QDirIterator>
 #include <QClipboard>
 #include <QByteArray>
+#include <QScreen>
 #include <cstdio>
 #include <cstdlib>
 #include <windows.h>
@@ -99,7 +100,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		dbgLog("MW 9: initializeHomeDir");
 		initializeHomeDir();
 	}
-	dbgLog("MW 10: constructor done!");
+	dbgLog("MW 10: adjustWindowToScreen");
+	adjustWindowToScreen();
+	dbgLog("MW 11: constructor done!");
 }
 
 MainWindow::~MainWindow()
@@ -146,6 +149,7 @@ void MainWindow::saveSettings()
 	QSettings userSettings("HKEY_CURRENT_USER\\Software\\Win32DiskImager", QSettings::NativeFormat);
 	userSettings.beginGroup("Settings");
 	userSettings.setValue("ImageDir", myHomeDir);
+	userSettings.setValue("WindowGeometry", saveGeometry());
 	userSettings.endGroup();
 }
 
@@ -154,6 +158,13 @@ void MainWindow::loadSettings()
 	QSettings userSettings("HKEY_CURRENT_USER\\Software\\Win32DiskImager", QSettings::NativeFormat);
 	userSettings.beginGroup("Settings");
 	myHomeDir = userSettings.value("ImageDir").toString();
+
+	// Restore window geometry if saved
+	QByteArray geometry = userSettings.value("WindowGeometry").toByteArray();
+	if (!geometry.isEmpty()) {
+		restoreGeometry(geometry);
+	}
+	userSettings.endGroup();
 }
 
 void MainWindow::initializeHomeDir()
@@ -181,6 +192,44 @@ void MainWindow::initializeHomeDir()
 	if (downloadPath.isEmpty())
 		downloadPath = QDir::currentPath();
 	myHomeDir = downloadPath;
+}
+
+void MainWindow::adjustWindowToScreen()
+{
+	// Check if we have saved geometry - if so, restoreGeometry already handled positioning
+	QSettings userSettings("HKEY_CURRENT_USER\\Software\\Win32DiskImager", QSettings::NativeFormat);
+	userSettings.beginGroup("Settings");
+	if (!userSettings.value("WindowGeometry").toByteArray().isEmpty()) {
+		userSettings.endGroup();
+		return;  // Geometry was restored in loadSettings()
+	}
+	userSettings.endGroup();
+
+	// First launch - fit to screen and center
+	QScreen* screen = QGuiApplication::primaryScreen();
+	if (!screen) return;
+
+	// Get available geometry (excludes taskbar, etc.)
+	QRect availableGeometry = screen->availableGeometry();
+
+	// Calculate 90% of screen size as maximum window size
+	int maxWidth = static_cast<int>(availableGeometry.width() * 0.9);
+	int maxHeight = static_cast<int>(availableGeometry.height() * 0.9);
+
+	// Get current size
+	QSize currentSize = size();
+
+	// Constrain to screen
+	int targetWidth = qMin(currentSize.width(), maxWidth);
+	int targetHeight = qMin(currentSize.height(), maxHeight);
+
+	// Resize window if needed
+	resize(targetWidth, targetHeight);
+
+	// Center on screen
+	int x = availableGeometry.x() + (availableGeometry.width() - targetWidth) / 2;
+	int y = availableGeometry.y() + (availableGeometry.height() - targetHeight) / 2;
+	move(x, y);
 }
 
 void MainWindow::setReadWriteButtonState()

@@ -18,8 +18,8 @@
   </property>
   <property name="minimumSize">
    <size>
-    <width>520</width>
-    <height>400</height>
+    <width>350</width>
+    <height>300</height>
    </size>
   </property>
   <property name="acceptDrops">

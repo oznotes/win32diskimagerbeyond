@@ -97,6 +97,7 @@ private:
 	void loadSettings();
 	void initializeHomeDir();
 	void updateHashControls();
+	void adjustWindowToScreen();
 
 	HANDLE hVolume;
 	HANDLE hFile;
