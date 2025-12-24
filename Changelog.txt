@@ -92,7 +92,7 @@ TIMER DISPLAY:
 DEVICE DROPDOWN:
   - Shows device size in GB for easier identification
 
-BUILD & RELEASE (December 2024):
+BUILD & RELEASE (December 2025):
   - 64-bit (x64) build support with MSVC2019/Qt 5.15.0
   - Debug logging disabled by default (wrapped in #ifdef DEBUG_LOGGING)
   - Fixed compiler warning C4101: removed unused cbBytesReturned variable
