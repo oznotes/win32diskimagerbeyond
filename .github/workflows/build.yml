@@ -39,7 +39,7 @@ jobs:
       run: |
         mkdir release
         copy Win32DiskImager.exe release\
-        windeployqt --release --no-translations --no-system-d3d-compiler --no-opengl-sw release\Win32DiskImager.exe
+        windeployqt --release --no-translations --no-system-d3d-compiler --no-opengl-sw --no-compiler-runtime release\Win32DiskImager.exe
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
