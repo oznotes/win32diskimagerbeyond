@@ -27,7 +27,8 @@
 #include <QtWidgets>
 #include <windows.h>
 #include <QByteArray>
- //#include <memory>
+#include <QElapsedTimer>
+//#include <memory>
 #include "ui_mainwindow.h"
 
 class QClipboard;
@@ -39,6 +40,7 @@ class TestModel : public QAbstractTableModel
 
 public:
 	TestModel(QObject* parent = 0);
+	~TestModel() override = default;  // Virtual destructor for proper cleanup when deleted via base pointer
 
 	void populateData(const QList<QString>& PartitionName, const QList<QString>& PartitionStart, const QList<QString>& PartitionEnd, const QList<QString>& PartitionSize);
 
@@ -79,7 +81,7 @@ protected slots:
 	void on_leFile_editingFinished();
 	void on_bHashCopy_clicked();
 private slots:
-	void on_cboxHashType_IdxChg();
+	void on_cboxHashType_currentIndexChanged(int index);
 	void on_bHashGen_clicked();
 	void on_bDetect_clicked();
 	void on_tbSearch_clicked();
@@ -103,8 +105,8 @@ private:
 	unsigned long long sectorsize;
 	int status;
 	char* sectorData;
-	char* sectorData2; //for verify
-	QTime update_timer;
+	char* sectorData2 = nullptr; //for verify - initialized to prevent use of uninitialized pointer in destructor
+	QElapsedTimer update_timer;
 	ElapsedTimer* elapsed_timer = NULL;
 	QClipboard* clipboard;
 	void generateHash(char* filename, int hashish);

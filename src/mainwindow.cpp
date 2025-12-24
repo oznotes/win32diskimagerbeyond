@@ -38,7 +38,7 @@
 #include "disk.h"
 #include "mainwindow.h"
 #include "elapsedtimer.h"
-#include "driveList.cpp"
+#include "driveList.h"
 
 TestModel::TestModel(QObject* parent) : QAbstractTableModel(parent)
 {
@@ -46,14 +46,30 @@ TestModel::TestModel(QObject* parent) : QAbstractTableModel(parent)
 
 MainWindow* MainWindow::instance = NULL;
 
+// Debug logger (enabled via DEBUG_LOGGING define)
+#ifdef DEBUG_LOGGING
+extern void dbgLog(const char* msg);
+#else
+inline void dbgLog(const char*) {}
+#endif
+
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 {
+	// CRITICAL: Set instance immediately to prevent infinite recursion
+	instance = this;
+
+	dbgLog("MW 1: setupUi");
 	setupUi(this);
-	this->setWindowTitle(this->windowTitle() + " eMMC/SD Edition [@imTheElectroboy]");
+	dbgLog("MW 2: setWindowTitle");
+	this->setWindowTitle(this->windowTitle() + " " + VER + " eMMC/SD Edition [@imTheElectroboy]");
+	dbgLog("MW 3: ElapsedTimer");
 	elapsed_timer = new ElapsedTimer();
 	statusbar->addPermanentWidget(elapsed_timer);   // "addpermanent" puts it on the RHS of the statusbar
+	dbgLog("MW 4: loadDriveIgnoreList");
 	loadDriveIgnoreList();
+	dbgLog("MW 5: getLogicalDrives");
 	getLogicalDrives();
+	dbgLog("MW 6: status setup");
 	status = STATUS_IDLE;
 	progressbar->reset();
 	clipboard = QApplication::clipboard();
@@ -71,16 +87,19 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	cboxHashType->addItem("MD5", QVariant(QCryptographicHash::Md5));
 	cboxHashType->addItem("SHA1", QVariant(QCryptographicHash::Sha1));
 	cboxHashType->addItem("SHA256", QVariant(QCryptographicHash::Sha256));
-	connect(this->cboxHashType, SIGNAL(currentIndexChanged(int)), SLOT(on_cboxHashType_IdxChg()));
+	dbgLog("MW 7: hash controls");
 	updateHashControls();
 	setReadWriteButtonState();
 	sectorData = NULL;
 	sectorsize = 0ul;
 
+	dbgLog("MW 8: loadSettings");
 	loadSettings();
 	if (myHomeDir.isEmpty()) {
+		dbgLog("MW 9: initializeHomeDir");
 		initializeHomeDir();
 	}
+	dbgLog("MW 10: constructor done!");
 }
 
 MainWindow::~MainWindow()
@@ -140,7 +159,8 @@ void MainWindow::loadSettings()
 void MainWindow::initializeHomeDir()
 {
 	myHomeDir = QDir::homePath();
-	if (myHomeDir == NULL) {
+	// QString doesn't support NULL comparison - use isEmpty() instead
+	if (myHomeDir.isEmpty()) {
 		myHomeDir = qgetenv("USERPROFILE");
 	}
 	/* Get Downloads the Windows way */
@@ -230,7 +250,7 @@ void MainWindow::on_tbBrowse_clicked()
 	dialog.setNameFilter(fileType);
 	dialog.setFileMode(QFileDialog::AnyFile);
 	dialog.setViewMode(QFileDialog::Detail);
-	dialog.setConfirmOverwrite(false);
+	dialog.setOption(QFileDialog::DontConfirmOverwrite, true);
 	if (fileinfo.exists())
 	{
 		dialog.selectFile(fileLocation);
@@ -260,7 +280,7 @@ void MainWindow::on_tbBrowse_clicked()
 void MainWindow::on_bHashCopy_clicked()
 {
 	QString hashSum(hashLabel->text());
-	if (!(hashSum.isEmpty()))
+	if (!(hashSum.isEmpty()) && clipboard != nullptr)
 	{
 		clipboard->setText(hashSum);
 	}
@@ -278,8 +298,13 @@ void MainWindow::generateHash(char* filename, int hashish)
 	QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
 
 	QFile file(filename);
-	file.open(QFile::ReadOnly);
+	if (!file.open(QFile::ReadOnly)) {
+		QApplication::restoreOverrideCursor();
+		hashLabel->setText(tr("Error: Cannot open file"));
+		return;
+	}
 	filehash.addData(&file);
+	file.close();  // Explicitly close the file
 
 	QByteArray hash = filehash.result();
 
@@ -329,7 +354,11 @@ void MainWindow::on_bWrite_clicked()
 		if (fileinfo.exists() && fileinfo.isFile() &&
 			fileinfo.isReadable() && (fileinfo.size() > 0))
 		{
-			if (leFile->text().at(0) == cboxDevice->currentText().at(1))
+			// Bounds check before accessing string characters
+			QString filePath = leFile->text();
+			QString deviceText = cboxDevice->currentText();
+			if (filePath.length() >= 1 && deviceText.length() >= 2 &&
+				filePath.at(0) == deviceText.at(1))
 			{
 				QMessageBox::critical(this, tr("Write Error"), tr("Image file cannot be located on the target device."));
 				return;
@@ -356,7 +385,7 @@ void MainWindow::on_bWrite_clicked()
 			bDetect->setEnabled(false);
 			double mbpersec;
 			unsigned long long i, lasti, availablesectors, numsectors;
-			DWORD deviceID = cboxDevice->currentText().split("\\\\.\\PhysicalDrive")[1].toInt();
+			DWORD deviceID = cboxDevice->currentData().toUInt();  // Device ID stored as item data
 			hFile = getHandleOnFile(LPCWSTR(leFile->text().data()), GENERIC_READ);
 			if (hFile == INVALID_HANDLE_VALUE)
 			{
@@ -372,6 +401,9 @@ void MainWindow::on_bWrite_clicked()
 
 			if (!getLockOnVolume(hRawDisk))
 			{
+				// Close both hFile (opened above) and hRawDisk to prevent handle leaks
+				CloseHandle(hFile);
+				hFile = INVALID_HANDLE_VALUE;
 				CloseHandle(hRawDisk);
 				status = STATUS_IDLE;
 				hRawDisk = INVALID_HANDLE_VALUE;
@@ -381,6 +413,9 @@ void MainWindow::on_bWrite_clicked()
 			}
 			if (!unmountVolume(hRawDisk))
 			{
+				// Close both handles to prevent leaks
+				CloseHandle(hFile);
+				hFile = INVALID_HANDLE_VALUE;
 				removeLockOnVolume(hRawDisk);
 				CloseHandle(hRawDisk);
 				status = STATUS_IDLE;
@@ -389,14 +424,19 @@ void MainWindow::on_bWrite_clicked()
 				setReadWriteButtonState();
 				return;
 			}
+			// Note: This check is redundant but kept for safety. Only close valid handles.
 			if (hRawDisk == INVALID_HANDLE_VALUE)
 			{
-				removeLockOnVolume(hRawDisk);
-				CloseHandle(hFile);
-				CloseHandle(hVolume);
+				// hRawDisk is invalid, only clean up handles that are valid
+				if (hFile != INVALID_HANDLE_VALUE) {
+					CloseHandle(hFile);
+					hFile = INVALID_HANDLE_VALUE;
+				}
+				if (hVolume != INVALID_HANDLE_VALUE) {
+					CloseHandle(hVolume);
+					hVolume = INVALID_HANDLE_VALUE;
+				}
 				status = STATUS_IDLE;
-				hRawDisk = INVALID_HANDLE_VALUE;
-				hFile = INVALID_HANDLE_VALUE;
 				bCancel->setEnabled(false);
 				setReadWriteButtonState();
 				return;
@@ -488,7 +528,8 @@ void MainWindow::on_bWrite_clicked()
 				}
 			}
 
-			progressbar->setRange(0, (numsectors == 0ul) ? 100 : (int)numsectors);
+			// Cap numsectors at INT_MAX to prevent overflow when casting to int
+			progressbar->setRange(0, (numsectors == 0ul) ? 100 : (int)qMin(numsectors, (unsigned long long)INT_MAX));
 			lasti = 0ul;
 			update_timer.start();
 			elapsed_timer->start();
@@ -528,6 +569,7 @@ void MainWindow::on_bWrite_clicked()
 				{
 					mbpersec = (((double)sectorsize * (i - lasti)) * ((float)ONE_SEC_IN_MS / update_timer.elapsed())) / 1024.0 / 1024.0;
 					statusbar->showMessage(QString("%1 MB/s").arg(mbpersec));
+					update_timer.start();
 					elapsed_timer->update(i, numsectors);
 					update_timer.start();
 					lasti = i;
@@ -590,7 +632,10 @@ void MainWindow::on_bRead_clicked()
 			myFile = (myHomeDir + "/" + leFile->text());
 		}
 		// check whether source and target device is the same...
-		if (myFile.at(0) == cboxDevice->currentText().at(1))
+		// Bounds check before accessing string characters
+		QString deviceText = cboxDevice->currentText();
+		if (myFile.length() >= 1 && deviceText.length() >= 2 &&
+			myFile.at(0) == deviceText.at(1))
 		{
 			QMessageBox::critical(this, tr("Write Error"), tr("Image file cannot be located on the target device."));
 			return;
@@ -612,7 +657,7 @@ void MainWindow::on_bRead_clicked()
 		status = STATUS_READING;
 		double mbpersec;
 		unsigned long long i, lasti, numsectors, filesize, spaceneeded = 0ull;
-		DWORD deviceID = cboxDevice->currentText().split("\\\\.\\PhysicalDrive")[1].toInt();
+		DWORD deviceID = cboxDevice->currentData().toUInt();  // Device ID stored as item data
 		hFile = getHandleOnFile(LPCWSTR(myFile.data()), GENERIC_WRITE);
 		if (hFile == INVALID_HANDLE_VALUE)
 		{
@@ -627,6 +672,9 @@ void MainWindow::on_bRead_clicked()
 		hRawDisk = getHandleOnDevice(deviceID, GENERIC_READ);
 		if (hRawDisk == INVALID_HANDLE_VALUE)
 		{
+			// Close hFile (opened above) to prevent handle leak
+			CloseHandle(hFile);
+			hFile = INVALID_HANDLE_VALUE;
 			status = STATUS_IDLE;
 			bCancel->setEnabled(false);
 			setReadWriteButtonState();
@@ -634,6 +682,9 @@ void MainWindow::on_bRead_clicked()
 		}
 		if (!getLockOnVolume(hRawDisk))
 		{
+			// Close both handles to prevent leaks
+			CloseHandle(hFile);
+			hFile = INVALID_HANDLE_VALUE;
 			CloseHandle(hRawDisk);
 			status = STATUS_IDLE;
 			hRawDisk = INVALID_HANDLE_VALUE;
@@ -643,6 +694,9 @@ void MainWindow::on_bRead_clicked()
 		}
 		if (!unmountVolume(hRawDisk))
 		{
+			// Close both handles to prevent leaks
+			CloseHandle(hFile);
+			hFile = INVALID_HANDLE_VALUE;
 			removeLockOnVolume(hRawDisk);
 			CloseHandle(hRawDisk);
 			status = STATUS_IDLE;
@@ -651,14 +705,20 @@ void MainWindow::on_bRead_clicked()
 			setReadWriteButtonState();
 			return;
 		}
+		// Note: This check is redundant after the previous check at line 644,
+		// but kept for safety. Only close valid handles.
 		if (hRawDisk == INVALID_HANDLE_VALUE)
 		{
-			removeLockOnVolume(hRawDisk);
-			CloseHandle(hFile);
-			CloseHandle(hRawDisk);
+			// hRawDisk is invalid, clean up all valid handles
+			if (hFile != INVALID_HANDLE_VALUE) {
+				CloseHandle(hFile);
+				hFile = INVALID_HANDLE_VALUE;
+			}
+			if (hVolume != INVALID_HANDLE_VALUE) {
+				CloseHandle(hVolume);
+				hVolume = INVALID_HANDLE_VALUE;
+			}
 			status = STATUS_IDLE;
-			hRawDisk = INVALID_HANDLE_VALUE;
-			hFile = INVALID_HANDLE_VALUE;
 			bCancel->setEnabled(false);
 			setReadWriteButtonState();
 			return;
@@ -668,17 +728,28 @@ void MainWindow::on_bRead_clicked()
 		{
 			// Read MBR partition table
 			sectorData = readSectorDataFromHandle(hRawDisk, 0, 1ul, 512ul);
-			numsectors = 1ul;
-			// Read partition information
-			for (i = 0ul; i < 4ul; i++)
+			if (sectorData != NULL)
 			{
-				uint32_t partitionStartSector = *((uint32_t*)(sectorData + 0x1BE + 8 + 16 * i));
-				uint32_t partitionNumSectors = *((uint32_t*)(sectorData + 0x1BE + 12 + 16 * i));
-				// Set numsectors to end of last partition
-				if (partitionStartSector + partitionNumSectors > numsectors)
+				numsectors = 1ul;
+				// Read partition information - verify buffer has enough data for MBR partition table
+				// MBR partition table starts at 0x1BE, each entry is 16 bytes, 4 entries = 64 bytes
+				// Need at least 0x1BE + 64 = 510 bytes, but we read 512 so this is safe
+				for (i = 0ul; i < 4ul; i++)
 				{
-					numsectors = partitionStartSector + partitionNumSectors;
+					// Use memcpy for portable unaligned access (safe on all architectures)
+					uint32_t partitionStartSector = 0;
+					uint32_t partitionNumSectors = 0;
+					memcpy(&partitionStartSector, sectorData + 0x1BE + 8 + 16 * i, sizeof(uint32_t));
+					memcpy(&partitionNumSectors, sectorData + 0x1BE + 12 + 16 * i, sizeof(uint32_t));
+					// Set numsectors to end of last partition
+					if (partitionStartSector + partitionNumSectors > numsectors)
+					{
+						numsectors = partitionStartSector + partitionNumSectors;
+					}
 				}
+				// Clean up after MBR read - sectorData will be reallocated in main read loop
+				delete[] sectorData;
+				sectorData = NULL;
 			}
 		}
 		filesize = getFileSizeInSectors(hFile, sectorsize);
@@ -693,12 +764,19 @@ void MainWindow::on_bRead_clicked()
 		if (!spaceAvailable(myFile.left(3).replace(QChar('/'), QChar('\\')).toLatin1().data(), spaceneeded))
 		{
 			QMessageBox::critical(this, tr("Write Error"), tr("Disk is not large enough for the specified image."));
+			// Clean up sectorData if allocated during partition check
+			if (sectorData != NULL) {
+				delete[] sectorData;
+				sectorData = NULL;
+			}
 			removeLockOnVolume(hRawDisk);
 			CloseHandle(hRawDisk);
 			CloseHandle(hFile);
-			CloseHandle(hVolume);
+			if (hVolume != INVALID_HANDLE_VALUE) {
+				CloseHandle(hVolume);
+				hVolume = INVALID_HANDLE_VALUE;
+			}
 			status = STATUS_IDLE;
-			sectorData = NULL;
 			hRawDisk = INVALID_HANDLE_VALUE;
 			hFile = INVALID_HANDLE_VALUE;
 			bCancel->setEnabled(false);
@@ -711,7 +789,8 @@ void MainWindow::on_bRead_clicked()
 		}
 		else
 		{
-			progressbar->setRange(0, (int)numsectors);
+			// Cap numsectors at INT_MAX to prevent overflow when casting to int
+			progressbar->setRange(0, (int)qMin(numsectors, (unsigned long long)INT_MAX));
 		}
 		lasti = 0ul;
 		update_timer.start();
@@ -727,7 +806,6 @@ void MainWindow::on_bRead_clicked()
 				status = STATUS_IDLE;
 				hRawDisk = INVALID_HANDLE_VALUE;
 				hFile = INVALID_HANDLE_VALUE;
-				hRawDisk = INVALID_HANDLE_VALUE;
 				bCancel->setEnabled(false);
 				setReadWriteButtonState();
 				return;
@@ -797,7 +875,11 @@ void MainWindow::on_bVerify_clicked()
 		QFileInfo fileinfo(leFile->text());
 		if (fileinfo.exists() && fileinfo.isFile() && fileinfo.isReadable() && (fileinfo.size() > 0))
 		{
-			if (leFile->text().at(0) == cboxDevice->currentText().at(1))
+			// Bounds check before accessing string characters
+			QString filePath = leFile->text();
+			QString deviceText = cboxDevice->currentText();
+			if (filePath.length() >= 1 && deviceText.length() >= 2 &&
+				filePath.at(0) == deviceText.at(1))
 			{
 				QMessageBox::critical(this, tr("Verify Error"), tr("Image file cannot be located on the target device."));
 				return;
@@ -809,8 +891,9 @@ void MainWindow::on_bVerify_clicked()
 			bVerify->setEnabled(false);
 			bDetect->setEnabled(false);
 			double mbpersec;
-			unsigned long long i, lasti, availablesectors, numsectors, result;
-			DWORD deviceID = cboxDevice->currentText().split("\\\\.\\PhysicalDrive")[1].toInt();
+			unsigned long long i, lasti, availablesectors, numsectors;
+			int memcmpResult;  // memcmp returns int, not unsigned long long
+			DWORD deviceID = cboxDevice->currentData().toUInt();  // Device ID stored as item data
 			hFile = getHandleOnFile(LPCWSTR(leFile->text().data()), GENERIC_READ);
 			if (hFile == INVALID_HANDLE_VALUE)
 			{
@@ -825,6 +908,9 @@ void MainWindow::on_bVerify_clicked()
 			hRawDisk = getHandleOnDevice(deviceID, GENERIC_READ);
 			if (!getLockOnVolume(hRawDisk))
 			{
+				// Close hFile (opened above) to prevent handle leak
+				CloseHandle(hFile);
+				hFile = INVALID_HANDLE_VALUE;
 				CloseHandle(hRawDisk);
 				status = STATUS_IDLE;
 				hRawDisk = INVALID_HANDLE_VALUE;
@@ -834,22 +920,35 @@ void MainWindow::on_bVerify_clicked()
 			}
 			if (!unmountVolume(hRawDisk))
 			{
+				// Close hFile to prevent handle leak
+				CloseHandle(hFile);
+				hFile = INVALID_HANDLE_VALUE;
 				removeLockOnVolume(hRawDisk);
 				CloseHandle(hRawDisk);
+				// Close hVolume if valid to prevent handle leak
+				if (hVolume != INVALID_HANDLE_VALUE) {
+					CloseHandle(hVolume);
+				}
 				status = STATUS_IDLE;
 				hVolume = INVALID_HANDLE_VALUE;
 				bCancel->setEnabled(false);
 				setReadWriteButtonState();
 				return;
 			}
+			// Note: This check is redundant but kept for safety. Only close valid handles.
 			if (hRawDisk == INVALID_HANDLE_VALUE)
 			{
-				removeLockOnVolume(hVolume);
-				CloseHandle(hFile);
-				CloseHandle(hVolume);
+				// hRawDisk is invalid, only clean up handles that are valid
+				if (hVolume != INVALID_HANDLE_VALUE) {
+					removeLockOnVolume(hVolume);
+					CloseHandle(hVolume);
+					hVolume = INVALID_HANDLE_VALUE;
+				}
+				if (hFile != INVALID_HANDLE_VALUE) {
+					CloseHandle(hFile);
+					hFile = INVALID_HANDLE_VALUE;
+				}
 				status = STATUS_IDLE;
-				hVolume = INVALID_HANDLE_VALUE;
-				hFile = INVALID_HANDLE_VALUE;
 				bCancel->setEnabled(false);
 				setReadWriteButtonState();
 				return;
@@ -939,7 +1038,8 @@ void MainWindow::on_bVerify_clicked()
 					return;
 				}
 			}
-			progressbar->setRange(0, (numsectors == 0ul) ? 100 : (int)numsectors);
+			// Cap numsectors at INT_MAX to prevent overflow when casting to int
+			progressbar->setRange(0, (numsectors == 0ul) ? 100 : (int)qMin(numsectors, (unsigned long long)INT_MAX));
 			update_timer.start();
 			elapsed_timer->start();
 			lasti = 0ul;
@@ -961,6 +1061,9 @@ void MainWindow::on_bVerify_clicked()
 				sectorData2 = readSectorDataFromHandle(hRawDisk, i, (numsectors - i >= 1024ul) ? 1024ul : (numsectors - i), sectorsize);
 				if (sectorData2 == NULL)
 				{
+					// Clean up sectorData before returning to prevent memory leak
+					delete[] sectorData;
+					sectorData = NULL;
 					QMessageBox::critical(this, tr("Verify Failure"), tr("Verification failed at sector: %1").arg(i));
 					removeLockOnVolume(hRawDisk);
 					CloseHandle(hRawDisk);
@@ -972,8 +1075,8 @@ void MainWindow::on_bVerify_clicked()
 					setReadWriteButtonState();
 					return;
 				}
-				result = memcmp(sectorData, sectorData2, ((numsectors - i >= 1024ul) ? 1024ul : (numsectors - i)) * sectorsize);
-				if (result)
+				memcmpResult = memcmp(sectorData, sectorData2, ((numsectors - i >= 1024ul) ? 1024ul : (numsectors - i)) * sectorsize);
+				if (memcmpResult != 0)
 				{
 					QMessageBox::critical(this, tr("Verify Failure"), tr("Verification failed at sector: %1").arg(i));
 					passfail = false;
@@ -1050,12 +1153,14 @@ void MainWindow::getLogicalDrives()
 	// the drives available on the system (bit 0 = A:, bit 1 = B:, etc)
 	unsigned long driveMask = GetLogicalDrives();
 	int i = 0;
-	int x = 0;
-	ULONG pID;
+	ULONG pID = 0;  // Initialize to prevent use of uninitialized value
+
+	dbgLog(QString("getLogicalDrives: driveMask=0x%1").arg(driveMask, 0, 16).toLatin1().data());
 
 	cboxDevice->clear();
-	QList<QString> DeviceList = list_devices();
-	DeviceList.removeAll(QString(""));
+
+	// Track which physical drive IDs have been added (have drive letters)
+	QSet<DWORD> addedPhysicalDrives;
 
 	while (driveMask != 0)
 	{
@@ -1065,31 +1170,63 @@ void MainWindow::getLogicalDrives()
 			// we've shifted
 			char drivename[] = "\\\\.\\A:\\";
 			drivename[4] += i;
-			if (!isDriveIgnored(drivename[4]))
+			bool ignored = isDriveIgnored(drivename[4]);
+			dbgLog(QString("  Drive %1: ignored=%2").arg(drivename[4]).arg(ignored).toLatin1().data());
+			if (!ignored)
 			{
-				if (checkDriveType(drivename, &pID))
+				bool result = checkDriveType(drivename, &pID);
+				dbgLog(QString("  checkDriveType returned %1, pID=%2").arg(result).arg(pID).toLatin1().data());
+				if (result)
 				{
-					// cboxDevice->addItem(QString("[%1:\\]").arg(drivename[4]), (qulonglong)pID);
-					// Drives no need.
-				}
-				else
-				{
-					// if anything is not approved ..
-					// remove.
-					DeviceList.removeAt(x);
+					// Get drive size for display
+					HANDLE hDrive = getHandleOnDevice(pID, FILE_READ_ATTRIBUTES);
+					unsigned long long sectorSize = 0;
+					unsigned long long numSectors = 0;
+					if (hDrive != INVALID_HANDLE_VALUE) {
+						numSectors = getNumberOfSectors(hDrive, &sectorSize);
+						CloseHandle(hDrive);
+					}
+					double sizeGB = (numSectors * sectorSize) / (1024.0 * 1024.0 * 1024.0);
+
+					QString displayText = QString("PhysicalDrive%1 [%2:\\] (%3 GB)")
+						.arg(pID).arg(drivename[4]).arg(sizeGB, 0, 'f', 2);
+					cboxDevice->addItem(displayText, (qulonglong)pID);
+					addedPhysicalDrives.insert(pID);
+					dbgLog(QString("  ADDED drive %1 to list").arg(drivename[4]).toLatin1().data());
 				}
 			}
-			++x;
 		}
 		driveMask >>= 1;
 		cboxDevice->setCurrentIndex(0);
 		++i;
 	}
 
-	foreach(QString drive, DeviceList) {
-		cboxDevice->addItem(drive);
+	// Now add any unmounted physical drives (no drive letter assigned)
+	dbgLog("Checking for unmounted physical drives...");
+	QList<QPair<DWORD, qulonglong>> physicalDrives = enumeratePhysicalDrives();
+
+	for (const auto& drive : physicalDrives)
+	{
+		DWORD driveNum = drive.first;
+		qulonglong sizeBytes = drive.second;
+
+		// Skip if this physical drive already has a drive letter
+		if (addedPhysicalDrives.contains(driveNum))
+		{
+			dbgLog(QString("  PhysicalDrive%1 already has drive letter, skipping").arg(driveNum).toLatin1().data());
+			continue;
+		}
+
+		// Format size nicely (GB with 2 decimal places)
+		double sizeGB = sizeBytes / (1024.0 * 1024.0 * 1024.0);
+		QString displayText = QString("PhysicalDrive%1 (%2 GB)").arg(driveNum).arg(sizeGB, 0, 'f', 2);
+
+		cboxDevice->addItem(displayText, (qulonglong)driveNum);
+		dbgLog(QString("  ADDED unmounted: %1").arg(displayText).toLatin1().data());
 	}
+
 	cboxDevice->setCurrentIndex(0);
+	dbgLog(QString("getLogicalDrives: done, %1 devices in list").arg(cboxDevice->count()).toLatin1().data());
 }
 
 // support routine for winEvent - returns the drive letter for a given mask
@@ -1128,7 +1265,8 @@ bool MainWindow::nativeEvent(const QByteArray& type, void* vMsg, long* result)
 			if (lpdb->dbch_devicetype == DBT_DEVTYP_VOLUME)
 			{
 				PDEV_BROADCAST_VOLUME lpdbv = (PDEV_BROADCAST_VOLUME)lpdb;
-				if (DBTF_NET)
+				// Only process non-network drives (skip if DBTF_NET flag is set)
+				if (!(lpdbv->dbcv_flags & DBTF_NET))
 				{
 					char ALET = FirstDriveFromMask(lpdbv->dbcv_unitmask);
 					// add device to combo box (after sanity check that
@@ -1158,19 +1296,17 @@ bool MainWindow::nativeEvent(const QByteArray& type, void* vMsg, long* result)
 			if (lpdb->dbch_devicetype == DBT_DEVTYP_VOLUME)
 			{
 				PDEV_BROADCAST_VOLUME lpdbv = (PDEV_BROADCAST_VOLUME)lpdb;
-				if (DBTF_NET)
+				// Only process non-network drives (skip if DBTF_NET flag is set)
+				if (!(lpdbv->dbcv_flags & DBTF_NET))
 				{
-					// char ALET = FirstDriveFromMask(lpdbv->dbcv_unitmask);
-					//  find the device that was removed in the combo box,
-					//  and remove it from there....
-					//  "removeItem" ignores the request if the index is
-					//  out of range, and findText returns -1 if the item isn't found.
-					//cboxDevice->removeItem(cboxDevice->findText(QString("[%1:\\]").arg(ALET)));
 					cboxDevice->clear();
 					getLogicalDrives();
 					setReadWriteButtonState();
 				}
 			}
+			break;
+		default:
+			// Other device change events (DBT_DEVNODES_CHANGED, etc.) - ignore
 			break;
 		} // skip the rest
 	} // end of if msg->message
@@ -1201,14 +1337,27 @@ void MainWindow::updateHashControls()
 	bHashCopy->setEnabled(haveHash);
 }
 
-void MainWindow::on_cboxHashType_IdxChg()
+void MainWindow::on_cboxHashType_currentIndexChanged(int)
 {
 	updateHashControls();
+	QFileInfo fileinfo(leFile->text());
+	bool validFile = (fileinfo.exists() && fileinfo.isFile() &&
+		fileinfo.isReadable() && (fileinfo.size() > 0));
+	if (cboxHashType->currentIndex() != 0 && !leFile->text().isEmpty() && validFile)
+	{
+		// Store QByteArray in local variable to prevent use-after-free
+		// (toLatin1().data() returns pointer to temporary that would be destroyed)
+		QByteArray filename = leFile->text().toLatin1();
+		generateHash(filename.data(), cboxHashType->currentData().toInt());
+	}
 }
 
 void MainWindow::on_bHashGen_clicked()
 {
-	generateHash(leFile->text().toLatin1().data(), cboxHashType->currentData().toInt());
+	// Store QByteArray in local variable to prevent use-after-free
+	// (toLatin1().data() returns pointer to temporary that would be destroyed)
+	QByteArray filename = leFile->text().toLatin1();
+	generateHash(filename.data(), cboxHashType->currentData().toInt());
 }
 
 void MainWindow::on_bDetect_clicked()
@@ -1219,11 +1368,11 @@ void MainWindow::on_bDetect_clicked()
 	bRead->setEnabled(false);
 	bVerify->setEnabled(false);
 	status = STATUS_READING;
-	int FLASHTYPE;
+    int FLASHTYPE; //= 0x1024; // Default to UFS
 	double mbpersec;
 	unsigned long long i, lasti, numsectors = 0ull;
 	// changes ..
-	DWORD deviceID = cboxDevice->currentText().split("\\\\.\\PhysicalDrive")[1].toInt();
+	DWORD deviceID = cboxDevice->currentData().toUInt();  // Device ID stored as item data
 	hRawDisk = getHandleOnDevice(deviceID, GENERIC_READ);
 
 	// addition
@@ -1247,19 +1396,9 @@ void MainWindow::on_bDetect_clicked()
 		return;
 	}
 
-	// end of addition test .
-	if (hRawDisk == INVALID_HANDLE_VALUE)
-	{
-		removeLockOnVolume(hVolume);
-		CloseHandle(hFile);
-		CloseHandle(hVolume);
-		status = STATUS_IDLE;
-		hVolume = INVALID_HANDLE_VALUE;
-		hFile = INVALID_HANDLE_VALUE;
-		bCancel->setEnabled(false);
-		setReadWriteButtonState();
-		return;
-	}
+	// Note: hRawDisk cannot be INVALID_HANDLE_VALUE at this point since we would
+	// have already returned earlier if getHandleOnDevice, getLockOnVolume, or
+	// unmountVolume failed. Removed dead code that had wrong handle cleanup.
 	bDetect->setEnabled(false);
 
 	numsectors = getNumberOfSectors(hRawDisk, &sectorsize);
@@ -1267,16 +1406,27 @@ void MainWindow::on_bDetect_clicked()
 	{
 		// Read MBR partition table
 		sectorData = readSectorDataFromHandle(hRawDisk, 0, 1ul, 512ul);
-		numsectors = 1ul;
-		// Read partition information
-		for (i = 0ul; i < 4ul; i++)
+		if (sectorData != NULL)
 		{
-			uint32_t partitionStartSector = *((uint32_t*)(sectorData + 0x1BE + 8 + 16 * i));
-			uint32_t partitionNumSectors = *((uint32_t*)(sectorData + 0x1BE + 12 + 16 * i));
-			// Set numsectors to end of last partition
-			if (partitionStartSector + partitionNumSectors > numsectors) {
-				numsectors = partitionStartSector + partitionNumSectors;
+			numsectors = 1ul;
+			// Read partition information - verify buffer has enough data for MBR partition table
+			// MBR partition table starts at 0x1BE, each entry is 16 bytes, 4 entries = 64 bytes
+			// Need at least 0x1BE + 64 = 510 bytes, but we read 512 so this is safe
+			for (i = 0ul; i < 4ul; i++)
+			{
+				// Use memcpy for portable unaligned access (safe on all architectures)
+				uint32_t partitionStartSector = 0;
+				uint32_t partitionNumSectors = 0;
+				memcpy(&partitionStartSector, sectorData + 0x1BE + 8 + 16 * i, sizeof(uint32_t));
+				memcpy(&partitionNumSectors, sectorData + 0x1BE + 12 + 16 * i, sizeof(uint32_t));
+				// Set numsectors to end of last partition
+				if (partitionStartSector + partitionNumSectors > numsectors) {
+					numsectors = partitionStartSector + partitionNumSectors;
+				}
 			}
+			// Clean up MBR sectorData before it gets overwritten by detection read
+			delete[] sectorData;
+			sectorData = NULL;
 		}
 	}
 	if (numsectors == 0ul)
@@ -1285,33 +1435,41 @@ void MainWindow::on_bDetect_clicked()
 	}
 	else
 	{
-		progressbar->setRange(0, (int)numsectors);
+		// Cap numsectors at INT_MAX to prevent overflow when casting to int
+			progressbar->setRange(0, (int)qMin(numsectors, (unsigned long long)INT_MAX));
 	}
 	lasti = 0ul;
 	update_timer.start();
 	elapsed_timer->start();
-	for (i = 0ul; i < 1 && status == STATUS_READING; i += 1)// changed
+	const unsigned long long sectorsToRead = 64;
+	// Note: Loop intentionally executes exactly once (i < 1) to read first sector block for detection
+	// The status check allows cancellation during the read operation
+	if (status == STATUS_READING)
 	{
-		sectorData = readSectorDataFromHandle(hRawDisk, i, 64, sectorsize);
+		i = 0ul;
+		sectorData = readSectorDataFromHandle(hRawDisk, i, sectorsToRead, sectorsize);
 
 		if (sectorData == NULL)
 		{
 			removeLockOnVolume(hRawDisk);
 			CloseHandle(hRawDisk);
-			CloseHandle(hFile);
+			// Note: hFile is not opened in on_bDetect_clicked, so only close if valid
+			if (hFile != INVALID_HANDLE_VALUE) {
+				CloseHandle(hFile);
+				hFile = INVALID_HANDLE_VALUE;
+			}
 			status = STATUS_IDLE;
 			hRawDisk = INVALID_HANDLE_VALUE;
-			hFile = INVALID_HANDLE_VALUE;
 			bCancel->setEnabled(false);
 			setReadWriteButtonState();
 			return;
 		}
-		else {
-			//delete[] sectorData;
-			//sectorData = NULL;
-		}
 	}
-	blob.append(QByteArray::fromRawData(sectorData, 32678));
+	// Use calculated size instead of hard-coded value (was 32678, typo for 32768 = 64*512)
+	int actualBlobSize = (int)(sectorsToRead * sectorsize);
+	// Use QByteArray constructor for DEEP COPY instead of fromRawData() which creates shallow copy
+	// This prevents use-after-free when sectorData is deleted later
+	blob.append(QByteArray(sectorData, actualBlobSize));
 
 	// do something with sectorData
 	//
@@ -1338,7 +1496,8 @@ void MainWindow::on_bDetect_clicked()
 	}
 	if (Found) {
 		//qDebug() << "Here we go again " << Location.toUInt(nullptr,16) << "\n";
-		int PartitionEntries = (int)Location.toUInt(nullptr, 16) + FLASHTYPE;
+		// Use qint64 to prevent overflow when PartitionEntries + 0x80 is repeated 128 times
+		qint64 PartitionEntries = (qint64)Location.toUInt(nullptr, 16) + FLASHTYPE;
 		//qDebug() << "Adress : " << PartitionEntries << "\n";
 		QList<QString> pName;
 		QList<QString> pStart;
@@ -1348,6 +1507,10 @@ void MainWindow::on_bDetect_clicked()
 		pName.clear();
 		pStart.clear();
 		pEnd.clear();
+
+		// Delete old model before creating new one to prevent memory leak
+		QAbstractItemModel* oldModel = this->PartView->model();
+
 		for (int i = 0; i < 0x80; i++)
 		{
 			QByteArray FirstLBA;
@@ -1356,25 +1519,65 @@ void MainWindow::on_bDetect_clicked()
 			QByteArray StartAdrHex;
 			QByteArray EndAdrHex;
 
-			FirstLBA = blob.mid(PartitionEntries + (int)0x20, 8);
-			LastLBA = blob.mid(PartitionEntries + (int)0x28, 8);
-			PartitionName = blob.mid(PartitionEntries + (int)0x38, 72);
-			PartitionEntries = PartitionEntries + (int)0x80;
+			// Bounds check: ensure blob has enough data for this partition entry
+			// Need to access up to PartitionEntries + 0x38 + 72 = PartitionEntries + 0xAA
+			if (PartitionEntries + 0xAA > blob.size())
+			{
+				break;  // Not enough data in blob
+			}
+			// Guard against qint64→int overflow when PartitionEntries exceeds INT_MAX
+			if (PartitionEntries > INT_MAX - 0x80)
+			{
+				break;  // Prevent integer overflow in cast to int
+			}
+
+			// Cast to int AFTER addition to prevent overflow in intermediate calculation
+			FirstLBA = blob.mid((int)(PartitionEntries + 0x20), 8);
+			LastLBA = blob.mid((int)(PartitionEntries + 0x28), 8);
+			PartitionName = blob.mid((int)(PartitionEntries + 0x38), 72);
+			PartitionEntries = PartitionEntries + 0x80;
 
 			StartAdrHex = this->swapper(FirstLBA);
 			EndAdrHex = this->swapper(LastLBA);
 
 			if (FirstLBA != QByteArray::fromHex("0000000000000000"))
 			{
-				// GET RID OF spaces.
+				// GET RID OF spaces - validate indexOf result before truncate
 				int chop = PartitionName.indexOf(QByteArray::fromHex("0000"));
-				PartitionName.truncate(chop + 1);
+				if (chop >= 0) {
+					PartitionName.truncate(chop + 1);
+				}
+				// else: pattern not found, keep PartitionName as-is
+
 				bool ok;
-				qulonglong tempStartAdr = StartAdrHex.toHex().toULongLong(&ok, 16) * FLASHTYPE;
+				qulonglong rawStartVal = StartAdrHex.toHex().toULongLong(&ok, 16);
+				qulonglong rawEndVal = EndAdrHex.toHex().toULongLong(&ok, 16);
+
+				// Check for multiplication overflow before computing addresses
+				// Max safe value: ULLONG_MAX / FLASHTYPE
+				const qulonglong maxSafeValue = ULLONG_MAX / (qulonglong)FLASHTYPE;
+				qulonglong tempStartAdr = 0;
+				qulonglong tempEndAdr = 0;
+
+				if (rawStartVal <= maxSafeValue) {
+					tempStartAdr = rawStartVal * FLASHTYPE;
+				}
+				if (rawEndVal <= maxSafeValue) {
+					tempEndAdr = (rawEndVal * FLASHTYPE) + FLASHTYPE;
+				}
+
 				QString StartAdr = QString("%1").arg(tempStartAdr, 12, 16, QLatin1Char('0'));
-				qulonglong tempEndAdr = (EndAdrHex.toHex().toULongLong(&ok, 16) * FLASHTYPE) + FLASHTYPE;
 				QString EndAdr = QString("%1").arg(tempEndAdr, 12, 16, QLatin1Char('0'));
-				QString PartName = QString("%1").arg(QTextCodec::codecForMib(1015)->toUnicode(PartitionName), 18);
+
+				// Check QTextCodec for NULL before using (may be unavailable on some systems)
+				QTextCodec* codec = QTextCodec::codecForMib(1015);
+				QString PartName;
+				if (codec != nullptr) {
+					PartName = QString("%1").arg(codec->toUnicode(PartitionName), 18);
+				} else {
+					// Fallback to Latin-1 if UTF-16LE codec not available
+					PartName = QString("%1").arg(QString::fromLatin1(PartitionName), 18);
+				}
 
 				qulonglong PartitionSize = tempEndAdr - tempStartAdr;
 				QString PartSize = QString("%1").arg(PartitionSize, 12, 16, QLatin1Char('0'));
@@ -1401,29 +1604,6 @@ void MainWindow::on_bDetect_clicked()
 				break;
 			}
 
-			// Create some data that is tabular in nature:
-			// Create model:
-			TestModel* PhoneBookModel = new TestModel(this);
-
-			// Populate model with data:
-			PhoneBookModel->populateData(pName, pStart, pEnd, pSize);
-
-			// Connect model to table view:
-			this->PartView->setModel(PhoneBookModel);
-
-			// Make table header visible and display table:
-			// Setting of table
-
-			QHeaderView* verticalHeader = PartView->verticalHeader();
-			verticalHeader->setSectionResizeMode(QHeaderView::Fixed);
-			verticalHeader->setDefaultSectionSize(18);
-			this->PartView->horizontalHeader()->setVisible(true);
-			this->PartView->horizontalHeader()->setStretchLastSection(true);
-			this->PartView->show();
-
-			delete[] sectorData;
-			sectorData = NULL;
-
 			if (update_timer.elapsed() >= ONE_SEC_IN_MS)
 			{
 				mbpersec = (((double)sectorsize * (i - lasti)) * ((float)ONE_SEC_IN_MS / update_timer.elapsed())) / 1024.0 / 1024.0;
@@ -1435,13 +1615,42 @@ void MainWindow::on_bDetect_clicked()
 			progressbar->setValue(i);
 			QCoreApplication::processEvents();
 		}
+
+		// Create model ONCE after collecting all partition data (moved out of loop to prevent memory leak)
+		// Delete old model if it exists
+		if (oldModel != nullptr) {
+			delete oldModel;
+		}
+
+		TestModel* PhoneBookModel = new TestModel(this);
+
+		// Populate model with data:
+		PhoneBookModel->populateData(pName, pStart, pEnd, pSize);
+
+		// Connect model to table view:
+		this->PartView->setModel(PhoneBookModel);
+
+		// Make table header visible and display table:
+		QHeaderView* verticalHeader = PartView->verticalHeader();
+		verticalHeader->setSectionResizeMode(QHeaderView::Fixed);
+		verticalHeader->setDefaultSectionSize(18);
+		this->PartView->horizontalHeader()->setVisible(true);
+		this->PartView->horizontalHeader()->setStretchLastSection(true);
+		this->PartView->show();
+
+		// Clean up sectorData after processing
+		delete[] sectorData;
+		sectorData = NULL;
 	}
 
-	removeLockOnVolume(hRawDisk);// <<
+	removeLockOnVolume(hRawDisk);
 	CloseHandle(hRawDisk);
-	CloseHandle(hFile);
 	hRawDisk = INVALID_HANDLE_VALUE;
-	hFile = INVALID_HANDLE_VALUE;
+	// Only close hFile if it was opened (in on_bDetect_clicked, it's not used)
+	if (hFile != INVALID_HANDLE_VALUE) {
+		CloseHandle(hFile);
+		hFile = INVALID_HANDLE_VALUE;
+	}
 	progressbar->reset();
 	statusbar->showMessage(tr("Done."));
 	bCancel->setEnabled(false);
@@ -1487,17 +1696,22 @@ QVariant TestModel::data(const QModelIndex& index, int role) const
 	if (!index.isValid() || role != Qt::DisplayRole) {
 		return QVariant();
 	}
+	// Bounds check to prevent undefined behavior if index.row() >= list size
+	int row = index.row();
+	if (row < 0 || row >= tm_partition_name.size()) {
+		return QVariant();
+	}
 	if (index.column() == 0) {
-		return tm_partition_name[index.row()];
+		return tm_partition_name[row];
 	}
 	else if (index.column() == 1) {
-		return tm_partition_start[index.row()];
+		return tm_partition_start[row];
 	}
 	else if (index.column() == 2) {
-		return tm_partition_size[index.row()];
+		return tm_partition_size[row];
 	}
 	else if (index.column() == 3) {
-		return tm_partition_end[index.row()];
+		return tm_partition_end[row];
 	}
 	return QVariant();
 }
@@ -1523,15 +1737,13 @@ QVariant TestModel::headerData(int section, Qt::Orientation orientation, int rol
 
 QByteArray MainWindow::swapper(QByteArray input)
 {
+	// Reverse byte order (for endianness conversion)
+	// Use input.size() as loop limit instead of arbitrary 0x80
 	QByteArray output;
-	for (int i = 0; i < 0x80; ++i)
+	output.reserve(input.size());
+	for (int i = input.size() - 1; i >= 0; --i)
 	{
-		if (input.size() <= 0)
-		{
-			break;
-		}
-		output.insert(i, input[input.size() - 1]);
-		input.remove(input.count() - 1, 1);
+		output.append(input[i]);
 	}
 	return output;
 }

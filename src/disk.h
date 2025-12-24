@@ -59,8 +59,14 @@ unsigned long long getNumberOfSectors(HANDLE handle, unsigned long long* sectors
 unsigned long long getFileSizeInSectors(HANDLE handle, unsigned long long sectorsize);
 bool spaceAvailable(char* location, unsigned long long spaceneeded);
 bool checkDriveType(char* name, ULONG* pid);
+QList<QPair<DWORD, qulonglong>> enumeratePhysicalDrives();  // Get all removable/USB physical drives
 
-void DebugToFile(QString txt); //helper function saves string to debug.log
+// Debug logging (enabled via DEBUG_LOGGING define)
+#ifdef DEBUG_LOGGING
+void DebugToFile(QString txt);
+#else
+inline void DebugToFile(QString) {}
+#endif
 
 void loadDriveIgnoreList();
 bool isDriveIgnored(char drive);

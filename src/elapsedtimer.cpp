@@ -19,84 +19,70 @@
 
 #include "elapsedtimer.h"
 
-ElapsedTimer::ElapsedTimer(QWidget* parent)
-	: QLabel(parent)
+ElapsedTimer::ElapsedTimer(QWidget* parent) : QLabel(parent)
 {
-	timer = new QTime();
-	setTextFormat(Qt::PlainText);
-	setTextInteractionFlags(Qt::NoTextInteraction);
-	setText(QString("0:00/0:00"));
-	setVisible(false);
+	timer = new QElapsedTimer();
+	setText("00:00:00");
+	setToolTip(tr("Elapsed Time"));
 }
 
 ElapsedTimer::~ElapsedTimer()
 {
 	delete timer;
+	timer = NULL;
 }
 
 int ElapsedTimer::ms()
 {
-	return(timer->elapsed());
+	return timer->elapsed();
 }
 
-// this uses a parameter to store the results rather than a return value in
-//	order to avoid mallocing the struct every time this function is called
-//  (which, potentially, is frequently).
-void ElapsedTimer::secsToHMS(unsigned int secs, timeStruct_t* hms)
+void ElapsedTimer::update(unsigned long long current, unsigned long long total)
 {
-	unsigned int mins = 0;
+	// Use qint64 to avoid integer overflow for long-running operations
+	qint64 elapsedMs = timer->elapsed();
+	qint64 baseSecs = elapsedMs / MS_PER_SEC;
 
-	hms->sec = secs % SECS_PER_MIN;
-	if (secs >= SECS_PER_MIN)
+	if (total > 0 && current < total && current > 0)
 	{
-		mins = (secs / SECS_PER_MIN);
-		hms->min = mins % MINS_PER_HOUR;
-		if (secs >= SECS_PER_HOUR)
-		{
-			hms->hour = secs / SECS_PER_HOUR;
-		}
+		// Use double for better precision in remaining time calculation
+		double ratio = (double)(total - current) / (double)current;
+		qint64 totalSecs = (qint64)(ratio * baseSecs);
+
+		// Cap at reasonable maximum (999:59:59)
+		if (totalSecs > 3599999) totalSecs = 3599999;
+
+		qint64 hours = totalSecs / (SEC_PER_MIN * MIN_PER_HOUR);
+		qint64 mins = (totalSecs % (SEC_PER_MIN * MIN_PER_HOUR)) / SEC_PER_MIN;
+		qint64 secs = totalSecs % SEC_PER_MIN;
+		setText(QString("%1:%2:%3")
+			.arg(hours, 2, 10, QChar('0'))
+			.arg(mins, 2, 10, QChar('0'))
+			.arg(secs, 2, 10, QChar('0')));
 	}
-}
-
-void ElapsedTimer::update(unsigned long long progress, unsigned long long total)
-{
-	timeStruct_t tTime, eTime;
-
-	unsigned int baseSecs = timer->elapsed() / MS_PER_SEC;
-	unsigned int totalSecs = (unsigned int)((float)baseSecs * ((float)total / (float)progress));
-
-	// convert seconds to hours:minues:seconds
-	secsToHMS(baseSecs, &eTime);
-	secsToHMS(totalSecs, &tTime);
-
-	// build the display string
-	const QChar& fillChar = QLatin1Char('0');
-	QString qs = QString("%1:%2/").arg(eTime.min, 2, 10, fillChar).arg(eTime.sec, 2, 10, fillChar);
-	if (eTime.hour > 0)
+	else
 	{
-		qs.prepend(QString("%1:").arg(eTime.hour, 2, 10, fillChar));
-	}
-	if (tTime.hour > 0)
-	{
-		qs += (QString("%1:").arg(tTime.hour, 2, 10, fillChar));
-	}
-	qs += (QString("%1:%2 ").arg(tTime.min, 2, 10, fillChar).arg(tTime.sec, 2, 10, fillChar));
-	// added a space following the times to separate the text slightly from the right edge of the status bar...
-	// there's probably a more "QT-correct" way to do that (like, margins or something),
-	// but this was simple and effective.
+		// Cap at reasonable maximum (999:59:59)
+		if (baseSecs > 3599999) baseSecs = 3599999;
 
-// display
-	setText(qs);
+		qint64 hours = baseSecs / (SEC_PER_MIN * MIN_PER_HOUR);
+		qint64 mins = (baseSecs % (SEC_PER_MIN * MIN_PER_HOUR)) / SEC_PER_MIN;
+		qint64 secs = baseSecs % SEC_PER_MIN;
+		setText(QString("%1:%2:%3")
+			.arg(hours, 2, 10, QChar('0'))
+			.arg(mins, 2, 10, QChar('0'))
+			.arg(secs, 2, 10, QChar('0')));
+	}
 }
 
 void ElapsedTimer::start()
 {
-	setVisible(true);
 	timer->start();
+	setText("00:00:00");
 }
 
 void ElapsedTimer::stop()
 {
-	setVisible(false);
-	setText(QString("0:00/0:00 "));
+	timer->invalidate();
+	setText("00:00:00");
 }

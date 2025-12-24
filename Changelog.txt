@@ -1,3 +1,114 @@
+================================================================================
+                    Win32 Disk Imager Beyond - Changelog
+================================================================================
+
+Version 1.0.3 (2024-12)
+--------------------------------------------------------------------------------
+
+CRITICAL FIXES:
+  - Fixed arithmetic overflow in sector calculations for disks >4GB
+  - Fixed use-after-free in QByteArray::fromRawData (changed to deep copy)
+  - Fixed division by zero in getNumberOfSectors
+  - Fixed buffer overflow in volume name construction
+  - Fixed uninitialized bytesread variable causing data corruption
+  - Fixed memory leak in on_bDetect_clicked partition check
+  - Fixed getDeviceID uninitialized data access
+
+MEMORY LEAKS FIXED:
+  - TestModel objects leaked in partition detection loop
+  - sectorData leaked on error paths in read/write/verify
+  - slashify() allocation leak on error
+  - sectorData2 uninitialized pointer in destructor
+  - QFile not closed after hash generation
+
+HANDLE LEAKS FIXED:
+  - hFile leak in on_bWrite_clicked error paths
+  - hFile leak in on_bRead_clicked error paths
+  - hVolume leak in on_bVerify_clicked error paths
+  - hRawDisk double cleanup with INVALID_HANDLE_VALUE
+  - Debug log file handle never closed
+
+INTEGER OVERFLOW PROTECTION:
+  - Added overflow check in sector size calculations
+  - Added qint64->int bounds check in blob.mid()
+  - Added FLASHTYPE multiplication overflow protection
+  - Fixed progressbar range overflow (numsectors > INT_MAX)
+  - Fixed integer overflow in ElapsedTimer for long operations
+
+LOGIC BUGS FIXED:
+  - spaceAvailable() returned TRUE on error (now returns FALSE)
+  - DBTF_NET flag check was always true
+  - QString NULL comparison (now uses isEmpty())
+  - indexOf(-1) validation before truncate
+  - Degenerate loop executing only once
+
+SAFETY IMPROVEMENTS:
+  - Added QString.at() bounds checks (4 locations)
+  - Added QTextCodec NULL check with Latin-1 fallback
+  - Added clipboard null check before setText
+  - Added pDevDesc null check in enumeratePhysicalDrives
+  - Added TestModel virtual destructor
+  - Added TestModel::data() row bounds validation
+  - Fixed unaligned memory access using memcpy
+  - Fixed unsafe sprintf() usage with _snprintf_s
+
+CODE QUALITY:
+  - Removed dead isDriveVirtual() function
+  - Removed commented/dead code blocks
+  - Added default case in nativeEvent switch
+  - Fixed memcmp return type (int, not unsigned long long)
+  - Initialized pID variable
+  - Fixed partial read/write validation
+
+UI CHANGES:
+  - Version number now displayed in window title bar
+  - Fixed text clipping on high DPI displays (GroupBox title descenders cut off)
+    Replaced QGroupBox titles with QLabel widgets to bypass Qt rendering bug
+
+GUI MODERNIZATION (Windows 11 Style):
+  - NEW: Modern QSS stylesheet with Fluent Design aesthetics
+  - Accent color theme (#0078d4 blue) for primary actions
+  - Rounded corners (3px) on buttons, inputs, and progress bars
+  - Hover/pressed/disabled states for all interactive elements
+  - Read/Write buttons styled as primary actions with accent background
+  - Monospace font (Consolas) for hash display
+  - Modern table view styling with subtle gridlines
+  - Checkbox styling with accent color when checked
+  - Status bar with subtle top border
+
+LAYOUT IMPROVEMENTS:
+  - Window now resizable (was fixed size)
+  - Minimum window size increased: 425x300 -> 520x400 pixels
+  - Improved margins (8px left, 12px top/right, 8px bottom)
+  - Consistent 6px spacing between elements
+  - Better visual hierarchy with grouped controls
+
+TIMER DISPLAY:
+  - New format: "00:00:00" (hours:minutes:seconds)
+  - Always visible in status bar (removed show/hide)
+  - Tooltip shows "Elapsed Time"
+  - Migrated from deprecated QTime to QElapsedTimer
+
+DEVICE DROPDOWN:
+  - Shows device size in GB for easier identification
+
+BUILD & RELEASE (December 2024):
+  - 64-bit (x64) build support with MSVC2019/Qt 5.15.0
+  - Debug logging disabled by default (wrapped in #ifdef DEBUG_LOGGING)
+  - Fixed compiler warning C4101: removed unused cbBytesReturned variable
+  - Fixed compiler warning C4267: changed int to size_t for strlen result
+  - Updated copyright to 2009-2026
+  - windeployqt release packaging
+
+
+Version 1.0.2
+--------------------------------------------------------------------------------
+  - Initial "Beyond" edition release
+  - eMMC/SD partition detection
+  - GPT/MBR partition table support
+  - UFS device detection
+
+
 Release 1.0.1 Beyond
 =============
 Added ignored_drives.cfg config file to skip/ignore/blacklist drives (subst, virtual, network)
@@ -92,3 +203,5 @@ Fixed LP:984510  "Cannot select Device"
 Fixed LP:923719  "An error occurred while accessing the device. Error1: Incorrect function"
 Fixed LP:985080  "C: with windows 7 partition erased with all data" (NOT FULLY VERIFIED)
 fixing memory leak
+
+================================================================================

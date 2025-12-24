@@ -26,7 +26,8 @@ INCLUDEPATH += .
 #CONFIG += release
 DEFINES -= UNICODE
 QT += widgets
-VERSION = 1.0.2
+LIBS += -luser32
+VERSION = 1.0.3
 VERSTR = '\\"$${VERSION}\\"'
 DEFINES += VER=\"$${VERSTR}\"
 DEFINES += WINVER=0x0601
@@ -81,5 +82,10 @@ for(tsfile, TRANSLATIONS) {
     command = $$LRELEASE $$tsfile -qm $$qmfile
     system($$command)|error("Failed to run: $$command")
     TRANSLATIONS_FILES += $$qmfile
+}
+
+CONFIG += embed_manifest_exe
+msvc {
+    QMAKE_LFLAGS_WINDOWS += /MANIFESTUAC:\"level=\'requireAdministrator\' uiAccess=\'false\'\"
 }
 

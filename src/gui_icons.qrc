@@ -5,4 +5,7 @@
         <file>images/Win32DiskImager.png</file>
         <file>images/search.png</file>
     </qresource>
+    <qresource prefix="/">
+        <file>style.qss</file>
+    </qresource>
 </RCC>
